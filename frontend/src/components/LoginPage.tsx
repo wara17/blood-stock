@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Alert, Spinner } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const LoginPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -16,6 +20,14 @@ const LoginPage: React.FC = () => {
   });
 
   const { login, register, isLoading, error, clearError } = useAuth();
+
+  // Get redirect path from URL params or location state
+  const getRedirectPath = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectParam = urlParams.get('redirect');
+    const stateFrom = location.state?.from?.pathname;
+    return redirectParam || stateFrom || '/dashboard';
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -39,6 +51,9 @@ const LoginPage: React.FC = () => {
     
     try {
       await login(formData.username, formData.password);
+      // After successful login, redirect to intended page
+      const redirectPath = getRedirectPath();
+      navigate(redirectPath, { replace: true });
     } catch (error) {
       // Error handled by context
     }
@@ -54,6 +69,9 @@ const LoginPage: React.FC = () => {
 
     try {
       await register(registerData.username, registerData.email, registerData.password);
+      // After successful registration, redirect to intended page
+      const redirectPath = getRedirectPath();
+      navigate(redirectPath, { replace: true });
     } catch (error) {
       // Error handled by context
     }

@@ -111,7 +111,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
+    // Listen for auth-failed events from API interceptors
+    const handleAuthFailed = () => {
+      console.log('Received auth-failed event, logging out...');
+      dispatch({ type: 'AUTH_LOGOUT' });
+    };
+
+    window.addEventListener('auth-failed', handleAuthFailed);
     checkAuth();
+
+    return () => {
+      window.removeEventListener('auth-failed', handleAuthFailed);
+    };
   }, []);
 
   const login = async (username: string, password: string) => {

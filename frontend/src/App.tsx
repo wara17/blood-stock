@@ -1,13 +1,15 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
+import BloodInventoryDashboard from './components/BloodInventoryDashboard';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
   
   if (isLoading) {
     return (
@@ -19,12 +21,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
   
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  // If not authenticated, redirect to login with current location
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return <>{children}</>;
 };
 
-// Public Route Component (redirect to dashboard if already authenticated)
+// Public Route Component (redirect to current page or dashboard if already authenticated)
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
+  const location = useLocation();
   
   if (isLoading) {
     return (
@@ -36,7 +44,13 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
   
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
+  // If authenticated, redirect to the intended page or dashboard
+  if (isAuthenticated) {
+    const from = location.state?.from?.pathname || '/dashboard';
+    return <Navigate to={from} replace />;
+  }
+  
+  return <>{children}</>;
 };
 
 function App() {
@@ -58,6 +72,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/blood-inventory" 
+              element={
+                <ProtectedRoute>
+                  <BloodInventoryDashboard />
                 </ProtectedRoute>
               } 
             />

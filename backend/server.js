@@ -4,6 +4,7 @@ const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+const bloodInventoryRoutes = require('./routes/bloodInventory');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,7 @@ app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/blood-inventory', bloodInventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -45,6 +47,7 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     endpoints: {
       auth: '/api/auth',
+      bloodInventory: '/api/blood-inventory',
       health: '/api/health'
     }
   });
