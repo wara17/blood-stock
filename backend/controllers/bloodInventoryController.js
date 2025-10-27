@@ -326,6 +326,35 @@ class BloodInventoryController {
     }
   }
 
+  // Get status statistics for dashboard
+  static async getStatusStats(req, res) {
+    try {
+      const [nearExpiry, reserved, usedToday] = await Promise.all([
+        BloodInventoryModel.getNearExpiry(),
+        BloodInventoryModel.getReservedCount(),
+        BloodInventoryModel.getUsedToday()
+      ]);
+      
+      res.json({
+        success: true,
+        message: 'Status statistics retrieved successfully',
+        data: {
+          nearExpiry,
+          reserved,
+          usedToday
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error getting status statistics:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+
   // Update blood status
   static async updateStatus(req, res) {
     try {

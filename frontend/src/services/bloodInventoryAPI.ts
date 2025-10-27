@@ -101,6 +101,12 @@ export interface BloodGroupStats {
   };
 }
 
+export interface StatusStats {
+  nearExpiry: number;
+  reserved: number;
+  usedToday: number;
+}
+
 export interface StatusUpdateRequest {
   status: 'available' | 'reserved' | 'used' | 'expired';
   reserved_for?: string;
@@ -161,6 +167,12 @@ const bloodInventoryAPI = {
   // Get blood group statistics for dashboard cards
   getBloodGroupStats: async (): Promise<{ success: boolean; message: string; data: BloodGroupStats }> => {
     const response = await api.get('/blood-inventory/blood-group-stats');
+    return response.data;
+  },
+
+  // Get status statistics for dashboard
+  getStatusStats: async (): Promise<{ success: boolean; message: string; data: StatusStats }> => {
+    const response = await api.get('/blood-inventory/status-stats');
     return response.data;
   },
 

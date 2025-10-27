@@ -487,6 +487,66 @@ class BloodInventoryModel {
       client.release();
     }
   }
+
+  // Get blood inventory near expiry (within 7 days)
+  static async getNearExpiry() {
+    const client = await pool.connect();
+    
+    try {
+      const query = `
+        SELECT COUNT(*) as count
+        FROM blood_inventory 
+        WHERE status = 'available' 
+        AND expiry_date <= CURRENT_DATE + INTERVAL '7 days'
+        AND expiry_date > CURRENT_DATE
+      `;
+      
+      const result = await client.query(query);
+      return parseInt(result.rows[0].count) || 0;
+      
+    } finally {
+      client.release();
+    }
+  }
+
+  // Get reserved blood inventory count
+  static async getReservedCount() {
+    const client = await pool.connect();
+    
+    try {
+      const query = `
+        SELECT COUNT(*) as count
+        FROM blood_inventory 
+        WHERE status = 'reserved'
+      `;
+      
+      const result = await client.query(query);
+      return parseInt(result.rows[0].count) || 0;
+      
+    } finally {
+      client.release();
+    }
+  }
+
+  // Get blood inventory used today
+  static async getUsedToday() {
+    const client = await pool.connect();
+    
+    try {
+      const query = `
+        SELECT COUNT(*) as count
+        FROM blood_inventory 
+        WHERE status = 'used'
+        AND DATE(used_at) = CURRENT_DATE
+      `;
+      
+      const result = await client.query(query);
+      return parseInt(result.rows[0].count) || 0;
+      
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = BloodInventoryModel;

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Button, Navbar, Nav, Dropdown, Badge, Modal } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
-import bloodInventoryAPI, { BloodGroupStats } from '../services/bloodInventoryAPI';
+import bloodInventoryAPI, { BloodGroupStats, StatusStats } from '../services/bloodInventoryAPI';
 
 // Interface for blood group data (using API types)
 interface BloodGroupData {
@@ -16,6 +16,7 @@ const Dashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [bloodGroupData, setBloodGroupData] = useState<BloodGroupData | null>(null);
+  const [statusStats, setStatusStats] = useState<StatusStats | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [showDonationGuide, setShowDonationGuide] = useState<boolean>(false);
 
@@ -38,7 +39,6 @@ const Dashboard: React.FC = () => {
   // Load blood group statistics
   const loadBloodGroupStats = async () => {
     try {
-      setLoading(true);
       const response = await bloodInventoryAPI.getBloodGroupStats();
       
       if (response.success) {
@@ -53,13 +53,43 @@ const Dashboard: React.FC = () => {
         AB: { 'Whole_Positive': 0, 'Whole_Negative': 0, 'PRC_Positive': 0, 'PRC_Negative': 0, 'LPRC_Positive': 0, 'LPRC_Negative': 0 },
         O: { 'Whole_Positive': 0, 'Whole_Negative': 0, 'PRC_Positive': 0, 'PRC_Negative': 0, 'LPRC_Positive': 0, 'LPRC_Negative': 0 }
       });
+    }
+  };
+
+  // Load status statistics
+  const loadStatusStats = async () => {
+    try {
+      const response = await bloodInventoryAPI.getStatusStats();
+      
+      if (response.success) {
+        setStatusStats(response.data);
+      }
+    } catch (error) {
+      console.error('Error loading status stats:', error);
+      // Set default values if error
+      setStatusStats({
+        nearExpiry: 0,
+        reserved: 0,
+        usedToday: 0
+      });
+    }
+  };
+
+  // Load all data
+  const loadDashboardData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadBloodGroupStats(),
+        loadStatusStats()
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadBloodGroupStats();
+    loadDashboardData();
   }, []);
 
   // Get total count for a blood group
@@ -243,28 +273,37 @@ const Dashboard: React.FC = () => {
                   <Card.Body>
                     {bloodGroupData && (
                       <>
-                        {/* Total Summary - Top Row 12 columns */}
+                        {/* Total Summary - Inline Layout */}
                         <Row className="mb-4">
                           <Col>
                             <Card className="bg-light border-0">
-                              <Card.Body className="text-center py-3">
-                                <h5 className="text-primary mb-2">สรุปเลือดพร้อมใช้ทั้งหมด</h5>
-                                <h3 className="text-primary mb-1">
-                                  {getTotalCount(bloodGroupData.A) + 
-                                   getTotalCount(bloodGroupData.B) + 
-                                   getTotalCount(bloodGroupData.AB) + 
-                                   getTotalCount(bloodGroupData.O)} ถุง
-                                </h3>
-                                <small className="text-muted">ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH')}</small>
+                              <Card.Body className="py-3">
+                                <Row className="align-items-center">
+                                  <Col lg={6} className="text-center">
+                                    <h5 className="text-primary mb-1">สรุปเลือดพร้อมใช้ทั้งหมด</h5>
+                                    <small className="text-muted">ข้อมูล ณ วันที่ {new Date().toLocaleDateString('th-TH')}</small>
+                                  </Col>
+                                  <Col lg={4} className="text-center">
+                                    <h1 className="text-primary mb-0 display-4">
+                                      {getTotalCount(bloodGroupData.A) + 
+                                       getTotalCount(bloodGroupData.B) + 
+                                       getTotalCount(bloodGroupData.AB) + 
+                                       getTotalCount(bloodGroupData.O)}
+                                    </h1>
+                                  </Col>
+                                  <Col lg={2} className="text-center">
+                                    <h5 className="text-primary mb-1">ถุง</h5>
+                                  </Col>
+                                </Row>
                               </Card.Body>
                             </Card>
                           </Col>
                         </Row>
 
-                        {/* Blood Groups Row 1 - A & B */}
+                        {/* Blood Groups - Single Row (4 columns) */}
                         <Row className="g-3 mb-3">
                           {/* Group A */}
-                          <Col md={6}>
+                          <Col lg={3} md={6}>
                             <Card className="h-100 border-danger">
                               <Card.Header className="bg-danger text-white text-center py-2">
                                 <h6 className="mb-0">กรุ๊ป A</h6>
@@ -304,7 +343,7 @@ const Dashboard: React.FC = () => {
                           </Col>
 
                           {/* Group B */}
-                          <Col md={6}>
+                          <Col lg={3} md={6}>
                             <Card className="h-100 border-primary">
                               <Card.Header className="bg-primary text-white text-center py-2">
                                 <h6 className="mb-0">กรุ๊ป B</h6>
@@ -342,12 +381,9 @@ const Dashboard: React.FC = () => {
                               </Card.Body>
                             </Card>
                           </Col>
-                        </Row>
 
-                        {/* Blood Groups Row 2 - AB & O */}
-                        <Row className="g-3 mb-3">
                           {/* Group AB */}
-                          <Col md={6}>
+                          <Col lg={3} md={6}>
                             <Card className="h-100 border-success">
                               <Card.Header className="bg-success text-white text-center py-2">
                                 <h6 className="mb-0">กรุ๊ป AB</h6>
@@ -387,7 +423,7 @@ const Dashboard: React.FC = () => {
                           </Col>
 
                           {/* Group O */}
-                          <Col md={6}>
+                          <Col lg={3} md={6}>
                             <Card className="h-100 border-warning">
                               <Card.Header className="bg-warning text-dark text-center py-2">
                                 <h6 className="mb-0">กรุ๊ป O</h6>
@@ -436,12 +472,14 @@ const Dashboard: React.FC = () => {
               <Col lg={3}>
                 <div className="d-flex flex-column gap-3">
                   {/* ใกล้หมดอายุ */}
-                  <Card className="border-warning">
-                    <Card.Header className="bg-warning text-dark">
+                  <Card className="border-danger">
+                    <Card.Header className="bg-danger text-white">
                       <h6 className="mb-0 text-center">⚠️ ใกล้หมดอายุ</h6>
                     </Card.Header>
                     <Card.Body className="text-center p-3">
-                      <div className="display-6 text-warning mb-2">-</div>
+                      <div className="display-6 text-danger mb-2">
+                        {loading ? '...' : (statusStats?.nearExpiry || 0)}
+                      </div>
                       <p className="mb-0 small text-muted">ถุงเลือดที่ใกล้หมดอายุ<br />(ภายใน 7 วัน)</p>
                     </Card.Body>
                   </Card>
@@ -452,7 +490,9 @@ const Dashboard: React.FC = () => {
                       <h6 className="mb-0 text-center">📋 จองแล้ว</h6>
                     </Card.Header>
                     <Card.Body className="text-center p-3">
-                      <div className="display-6 text-info mb-2">-</div>
+                      <div className="display-6 text-info mb-2">
+                        {loading ? '...' : (statusStats?.reserved || 0)}
+                      </div>
                       <p className="mb-0 small text-muted">ถุงเลือดที่มีการจอง<br />รอการใช้งาน</p>
                     </Card.Body>
                   </Card>
@@ -463,7 +503,9 @@ const Dashboard: React.FC = () => {
                       <h6 className="mb-0 text-center">✅ ใช้งานแล้ว</h6>
                     </Card.Header>
                     <Card.Body className="text-center p-3">
-                      <div className="display-6 text-secondary mb-2">-</div>
+                      <div className="display-6 text-secondary mb-2">
+                        {loading ? '...' : (statusStats?.usedToday || 0)}
+                      </div>
                       <p className="mb-0 small text-muted">ถุงเลือดที่ใช้งานแล้ว<br />(วันนี้)</p>
                     </Card.Body>
                   </Card>

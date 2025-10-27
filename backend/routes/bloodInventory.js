@@ -22,6 +22,9 @@ router.get('/dashboard-stats', BloodInventoryController.getDashboardStats);
 // GET /api/blood-inventory/blood-group-stats - Get blood group statistics for dashboard
 router.get('/blood-group-stats', BloodInventoryController.getBloodGroupStats);
 
+// GET /api/blood-inventory/status-stats - Get status statistics for dashboard
+router.get('/status-stats', BloodInventoryController.getStatusStats);
+
 // GET /api/blood-inventory/available - Get available blood inventory
 router.get('/available', validateQuery, BloodInventoryController.getAvailable);
 
