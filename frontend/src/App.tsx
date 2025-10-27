@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import BloodInventoryDashboard from './components/BloodInventoryDashboard';
+import BloodReservation from './components/BloodReservation';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 // Protected Route Component
@@ -80,6 +81,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <BloodInventoryDashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/blood-reservation" 
+              element={
+                <ProtectedRoute>
+                  <BloodReservation />
                 </ProtectedRoute>
               } 
             />

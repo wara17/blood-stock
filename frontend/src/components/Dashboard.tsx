@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
                 <Card 
                   className="border-success shadow-sm h-100" 
                   style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                  onClick={() => {/* TODO: navigate to requests */}}
+                  onClick={() => navigate('/blood-reservation')}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
