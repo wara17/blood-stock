@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const bloodInventoryRoutes = require('./routes/bloodInventory');
+const reservationRoutes = require('./routes/reservations');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,7 +18,7 @@ const corsOptions = {
     'http://127.0.0.1:3000'
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 
@@ -30,6 +31,7 @@ app.use(cookieParser());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/blood-inventory', bloodInventoryRoutes);
+app.use('/api/reservations', reservationRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -48,6 +50,7 @@ app.get('/', (req, res) => {
     endpoints: {
       auth: '/api/auth',
       bloodInventory: '/api/blood-inventory',
+      reservations: '/api/reservations',
       health: '/api/health'
     }
   });

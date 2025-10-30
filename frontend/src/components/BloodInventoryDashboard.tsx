@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Table, Modal, Form, Alert, Spinner, Badge, Navbar, Nav, Dropdown, Toast, ToastContainer } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Container, Row, Col, Card, Button, Table, Modal, Form, Alert, Spinner, Badge, Toast, ToastContainer } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { debounce } from 'lodash';
 import bloodInventoryAPI, { BloodInventoryItem, BloodInventoryFilter } from '../services/bloodInventoryAPI';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
 import ConfirmModal from '../shared/components/ConfirmModal';
+import PaginationComponent from '../shared/components/PaginationComponent';
 
 const BloodInventoryDashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [bloodInventory, setBloodInventory] = useState<BloodInventoryItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
@@ -37,6 +40,20 @@ const BloodInventoryDashboard: React.FC = () => {
     totalPages: 0
   });
   const [filters, setFilters] = useState<BloodInventoryFilter>({});
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [receivedByFilter, setReceivedByFilter] = useState<string>('');
+
+  // Use refs to get current state values in debounced functions
+  const filtersRef = useRef({
+    receivedByFilter: ''
+  });
+
+  // Update refs when state changes
+  useEffect(() => {
+    filtersRef.current = {
+      receivedByFilter
+    };
+  }, [receivedByFilter]);
 
   // Form state
   const [formData, setFormData] = useState<Omit<BloodInventoryItem, 'id' | 'created_at' | 'updated_at'>>({
@@ -297,6 +314,67 @@ const BloodInventoryDashboard: React.FC = () => {
     setSuccess('');
   };
 
+  // Debounced search function for received_by
+  const debouncedReceivedBySearch = useCallback(
+    debounce((searchValue: string) => {
+      setIsLoading(true);
+      
+      // ใช้ current values จาก ref
+      const currentFilters = filtersRef.current;
+      
+      const newFilters = {
+        ...filters,
+        received_by: searchValue,
+        page: 1 // Reset to first page when searching
+      };
+
+      // Remove empty filters
+      Object.keys(newFilters).forEach(key => {
+        if (newFilters[key as keyof BloodInventoryFilter] === '' || newFilters[key as keyof BloodInventoryFilter] === undefined) {
+          delete newFilters[key as keyof BloodInventoryFilter];
+        }
+      });
+
+      console.log('Received By Search - Filter params:', newFilters);
+
+      setFilters(newFilters);
+      loadBloodInventory(newFilters).finally(() => {
+        setIsLoading(false);
+      });
+    }, 1000),
+    [filters] // Include filters as dependency
+  );
+
+  // Handle received_by filter change
+  const handleReceivedByFilterChange = (value: string) => {
+    console.log('Received By Filter onChange:', value);
+    setReceivedByFilter(value);
+    
+    // ยกเลิก debounce ที่กำลังรอ
+    debouncedReceivedBySearch.cancel();
+    
+    if (value.trim() !== '') {
+      // ค้นหาเมื่อพิมพ์ค่าใดๆ แล้วหยุดพิมพ์ 1 วินาที
+      console.log('Calling debouncedReceivedBySearch with:', value);
+      debouncedReceivedBySearch(value);
+    } else {
+      // ถ้าไม่มีค่า ให้โหลดข้อมูลทั้งหมด
+      console.log('Clearing received_by filter, loading all data');
+      setIsLoading(true);
+      const newFilters = { ...filters };
+      delete newFilters.received_by;
+      setFilters(newFilters);
+      loadBloodInventory(newFilters).finally(() => setIsLoading(false));
+    }
+  };
+
+  // Cleanup debounced function on unmount
+  useEffect(() => {
+    return () => {
+      debouncedReceivedBySearch.cancel();
+    };
+  }, [debouncedReceivedBySearch]);
+
   // Handle filter change
   const handleFilterChange = (filterName: string, value: string) => {
     const newFilters = {
@@ -371,10 +449,20 @@ const BloodInventoryDashboard: React.FC = () => {
   // Get badge color for blood type
   const getBloodTypeBadge = (bloodType: string) => {
     switch (bloodType) {
-      case 'Whole blood': return 'primary';
+      case 'Whole_blood': return 'primary';
       case 'PRC': return 'success';
       case 'LPRC': return 'warning';
       default: return 'secondary';
+    }
+  };
+
+  // Format blood type for display
+  const formatBloodType = (bloodType: string) => {
+    switch (bloodType) {
+      case 'Whole_blood': return 'Whole blood';
+      case 'PRC': return 'PRC';
+      case 'LPRC': return 'LPRC';
+      default: return bloodType;
     }
   };
 
@@ -420,46 +508,20 @@ const BloodInventoryDashboard: React.FC = () => {
 
   return (
     <>
-      {/* Navigation Bar */}
-      <Navbar bg="danger" variant="dark" expand="lg" className="shadow">
-        <Container>
-          <Navbar.Brand as={Link} to="/dashboard">
-            🩸 Blood Stock Management
-          </Navbar.Brand>
-          <Navbar.Toggle aria-controls="basic-navbar-nav" />
-          <Navbar.Collapse id="basic-navbar-nav">
-            <Nav className="me-auto">
-              <Nav.Link as={Link} to="/dashboard">หน้าหลัก</Nav.Link>
-              <Nav.Link as={Link} to="/blood-inventory" active>คลังเลือด</Nav.Link>
-              <Nav.Link href="#requests">การร้องขอ</Nav.Link>
-              <Nav.Link href="#reports">รายงาน</Nav.Link>
-            </Nav>
-            <Nav>
-              <Dropdown align="end">
-                <Dropdown.Toggle variant="outline-light" id="dropdown-basic">
-                  👤 {user?.username}
-                </Dropdown.Toggle>
-                <Dropdown.Menu>
-                  <Dropdown.Item href="#profile">โปรไฟล์</Dropdown.Item>
-                  <Dropdown.Item href="#settings">การตั้งค่า</Dropdown.Item>
-                  <Dropdown.Divider />
-                  <Dropdown.Item onClick={logout}>ออกจากระบบ</Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown>
-            </Nav>
-          </Navbar.Collapse>
-        </Container>
-      </Navbar>
-
     <Container fluid className="py-4">
       <Row>
         <Col>
           <Card>
             <Card.Header className="d-flex justify-content-between align-items-center">
-              <h4 className="mb-0">ระบบคลังเลือด</h4>
-              <Button variant="primary" onClick={handleNewBlood}>
-                เพิ่มข้อมูลเลือด
-              </Button>
+              <h4 className="mb-0"><i className="fas fa-warehouse me-2"></i>ระบบคลังเลือด</h4>
+              <div className="d-flex gap-2">
+                <Button className="btn btn-danger" onClick={() => navigate('/pending-dispense')}>
+                  <i className="fas fa-clock me-2"></i>รายการรอจ่าย
+                </Button>
+                <Button className="btn btn-primary" onClick={handleNewBlood}>
+                  <i className="fas fa-plus me-2"></i>เพิ่มข้อมูลเลือด
+                </Button>
+              </div>
             </Card.Header>
             <Card.Body>
               {/* Filters */}
@@ -502,7 +564,7 @@ const BloodInventoryDashboard: React.FC = () => {
                       onChange={(e) => handleFilterChange('blood_type', e.target.value)}
                     >
                       <option value="">ทั้งหมด</option>
-                      <option value="Whole blood">Whole blood</option>
+                      <option value="Whole_blood">Whole blood</option>
                       <option value="PRC">PRC</option>
                       <option value="LPRC">LPRC</option>
                     </Form.Select>
@@ -523,25 +585,50 @@ const BloodInventoryDashboard: React.FC = () => {
                 </Col>
                 <Col md={3}>
                   <Form.Group>
-                    <Form.Label>ผู้รับ</Form.Label>
-                    <Form.Control
-                      type="text"
-                      placeholder="ค้นหาชื่อผู้รับ..."
-                      value={filters.received_by || ''}
-                      onChange={(e) => handleFilterChange('received_by', e.target.value)}
-                    />
+                    <Form.Label>ผู้รับ {isLoading && <span className="spinner-border spinner-border-sm ms-1" role="status" aria-hidden="true"></span>}</Form.Label>
+                    <div className="position-relative">
+                      <Form.Control
+                        type="text"
+                        placeholder="ค้นหาชื่อผู้รับ..."
+                        value={receivedByFilter}
+                        onChange={(e) => handleReceivedByFilterChange(e.target.value)}
+                        disabled={isLoading}
+                      />
+                      {isLoading && (
+                        <div className="position-absolute top-50 end-0 translate-middle-y me-3">
+                          <div className="spinner-border spinner-border-sm text-primary" role="status">
+                            <span className="visually-hidden">กำลังค้นหา...</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </Form.Group>
                 </Col>
                 <Col md={1} className="d-flex align-items-end">
                   <Button 
-                    variant="outline-secondary" 
+                    className="btn btn-secondary w-100" 
                     onClick={() => {
+                      // Cancel any pending debounced searches
+                      debouncedReceivedBySearch.cancel();
+                      
+                      // Reset all filters and state
                       setFilters({});
-                      loadBloodInventory({});
+                      setReceivedByFilter('');
+                      setIsLoading(true);
+                      loadBloodInventory({}).finally(() => setIsLoading(false));
                     }}
-                    className="w-100"
+                    disabled={isLoading}
                   >
-                    🗑️ ล้าง
+                    {isLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        กำลังล้าง...
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-eraser me-2"></i> ล้าง
+                      </>
+                    )}
                   </Button>
                 </Col>
               </Row>
@@ -594,7 +681,7 @@ const BloodInventoryDashboard: React.FC = () => {
                             <td>{formatDate(item.received_date)}</td>
                             <td>
                               <Badge bg={getBloodTypeBadge(item.blood_type)}>
-                                {item.blood_type}
+                                {formatBloodType(item.blood_type)}
                               </Badge>
                             </td>
                             <td>
@@ -619,19 +706,16 @@ const BloodInventoryDashboard: React.FC = () => {
                             <td>{item.received_by}</td>
                             <td onClick={(e) => e.stopPropagation()}>
                               <Button
-                                variant="outline-primary"
-                                size="sm"
-                                className="me-1"
+                                className="btn btn-sm btn-primary me-1"
                                 onClick={() => handleEdit(item)}
                               >
-                                แก้ไข
+                                <i className="fas fa-edit me-1"></i>แก้ไข
                               </Button>
                               <Button
-                                variant="outline-danger"
-                                size="sm"
+                                className="btn btn-sm btn-danger"
                                 onClick={() => handleDelete(item)}
                               >
-                                ลบ
+                                <i className="fas fa-trash me-1"></i>ลบ
                               </Button>
                             </td>
                           </tr>
@@ -641,38 +725,22 @@ const BloodInventoryDashboard: React.FC = () => {
                   </Table>
 
                   {/* Pagination */}
-                  {pagination.totalPages > 1 && (
-                    <div className="d-flex justify-content-between align-items-center">
-                      <div>
-                        แสดง {bloodInventory.length} จาก {pagination.total} รายการ
-                      </div>
-                      <div>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          disabled={pagination.page <= 1}
-                          onClick={() => handlePageChange(pagination.page - 1)}
-                          className="me-1"
-                        >
-                          ก่อนหน้า
-                        </Button>
-                        <span className="mx-2">
-                          หน้า {pagination.page} จาก {pagination.totalPages}
-                        </span>
-                        <Button
-                          variant="outline-secondary"
-                          size="sm"
-                          disabled={pagination.page >= pagination.totalPages}
-                          onClick={() => handlePageChange(pagination.page + 1)}
-                        >
-                          ถัดไป
-                        </Button>
-                      </div>
-                    </div>
-                  )}
+                  <PaginationComponent
+                    currentPage={pagination.page}
+                    totalPages={pagination.totalPages}
+                    onPageChange={handlePageChange}
+                    loading={loading}
+                    showInfo={true}
+                    className="mt-3"
+                  />
                 </>
               )}
             </Card.Body>
+            <Card.Footer className="d-flex justify-content-left">
+              <Button className="btn btn-secondary" onClick={() => navigate('/dashboard')}>
+                <i className="fas fa-arrow-left me-2"></i>กลับสู่หน้าหลัก
+              </Button>
+            </Card.Footer>
           </Card>
         </Col>
       </Row>
@@ -729,7 +797,7 @@ const BloodInventoryDashboard: React.FC = () => {
                     required
                   >
                     <option value="">-- เลือกชนิดของเลือด --</option>
-                    <option value="Whole blood">Whole blood</option>
+                    <option value="Whole_blood">Whole blood</option>
                     <option value="PRC">PRC</option>
                     <option value="LPRC">LPRC</option>
                   </Form.Select>
@@ -844,11 +912,11 @@ const BloodInventoryDashboard: React.FC = () => {
             </Form.Group>
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowModal(false)}>
-              ยกเลิก
+            <Button className="btn btn-secondary" onClick={() => setShowModal(false)}>
+              <i className="fas fa-times me-2"></i>ยกเลิก
             </Button>
-            <Button variant="primary" type="submit">
-              {editingItem ? 'บันทึกการแก้ไข' : 'เพิ่มข้อมูล'}
+            <Button className="btn btn-primary" type="submit">
+              <i className="fas fa-save me-2"></i>{editingItem ? 'บันทึกการแก้ไข' : 'เพิ่มข้อมูล'}
             </Button>
           </Modal.Footer>
         </Form>
@@ -866,7 +934,7 @@ const BloodInventoryDashboard: React.FC = () => {
                 <div className="mb-3 p-3 bg-light rounded">
                   <h6 className="mb-2">ข้อมูลเลือด</h6>
                   <p className="mb-1"><strong>หมายเลขถุง:</strong> {statusUpdateItem.bag_number}</p>
-                  <p className="mb-1"><strong>ชนิด:</strong> {statusUpdateItem.blood_type}</p>
+                  <p className="mb-1"><strong>ชนิด:</strong> {formatBloodType(statusUpdateItem.blood_type)}</p>
                   <p className="mb-0">
                     <strong>หมู่เลือด:</strong> {statusUpdateItem.blood_group}{' '}
                     <Badge bg={getRhFactorBadge(statusUpdateItem.rh_factor)}>
@@ -916,10 +984,10 @@ const BloodInventoryDashboard: React.FC = () => {
             )}
           </Modal.Body>
           <Modal.Footer>
-            <Button variant="secondary" onClick={() => setShowStatusModal(false)}>
+            <Button className="btn btn-secondary" onClick={() => setShowStatusModal(false)}>
               ยกเลิก
             </Button>
-            <Button variant="primary" type="submit">
+            <Button className="btn btn-primary" type="submit">
               อัปเดตสถานะ
             </Button>
           </Modal.Footer>
@@ -950,7 +1018,7 @@ const BloodInventoryDashboard: React.FC = () => {
                         <strong>ชนิดของเลือด:</strong>
                         <br />
                         <Badge bg={getBloodTypeBadge(viewingItem.blood_type)} className="fs-6">
-                          {viewingItem.blood_type}
+                          {formatBloodType(viewingItem.blood_type)}
                         </Badge>
                       </div>
                       <div className="mb-2">
@@ -1079,7 +1147,7 @@ const BloodInventoryDashboard: React.FC = () => {
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowViewModal(false)}>
+          <Button className="btn btn-secondary" onClick={() => setShowViewModal(false)}>
             ปิด
           </Button>
         </Modal.Footer>

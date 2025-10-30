@@ -1,10 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import Layout from './layouts/Layout';
 import LoginPage from './components/LoginPage';
 import Dashboard from './components/Dashboard';
 import BloodInventoryDashboard from './components/BloodInventoryDashboard';
-import BloodReservation from './components/BloodReservation';
+import BloodReservationList from './components/BloodReservationList';
+import BloodReservationForm from './components/BloodReservationForm';
+import BloodDispensePage from './components/BloodDispensePage';
+import PendingDispenseList from './components/PendingDispenseList';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 // Protected Route Component
@@ -72,7 +76,9 @@ function App() {
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Layout>
+                    <Dashboard />
+                  </Layout>
                 </ProtectedRoute>
               } 
             />
@@ -80,15 +86,49 @@ function App() {
               path="/blood-inventory" 
               element={
                 <ProtectedRoute>
-                  <BloodInventoryDashboard />
+                  <Layout>
+                    <BloodInventoryDashboard />
+                  </Layout>
                 </ProtectedRoute>
               } 
             />
             <Route 
-              path="/blood-reservation" 
+              path="/blood-reservation-list" 
               element={
                 <ProtectedRoute>
-                  <BloodReservation />
+                  <Layout>
+                    <BloodReservationList />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/blood-reservation-form" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <BloodReservationForm />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/blood-dispense/:reservationId" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <BloodDispensePage />
+                  </Layout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/pending-dispense" 
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <PendingDispenseList />
+                  </Layout>
                 </ProtectedRoute>
               } 
             />

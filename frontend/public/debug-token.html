@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Token Debug</title>
+</head>
+<body>
+    <h1>Token Debug Page</h1>
+    <button onclick="checkToken()">Check Token</button>
+    <button onclick="testAPI()">Test API</button>
+    <div id="result"></div>
+
+    <script>
+        function checkToken() {
+            const authToken = localStorage.getItem('authToken');
+            const token = localStorage.getItem('token');
+            
+            document.getElementById('result').innerHTML = `
+                <h3>localStorage Debug:</h3>
+                <p><strong>authToken:</strong> ${authToken ? 'EXISTS' : 'NOT FOUND'}</p>
+                <p><strong>token:</strong> ${token ? 'EXISTS' : 'NOT FOUND'}</p>
+                <p><strong>authToken length:</strong> ${authToken ? authToken.length : 0}</p>
+                <p><strong>authToken preview:</strong> ${authToken ? authToken.substring(0, 50) + '...' : 'N/A'}</p>
+            `;
+        }
+
+        async function testAPI() {
+            const authToken = localStorage.getItem('authToken');
+            
+            try {
+                const response = await fetch('http://localhost:3002/api/reservations', {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                document.getElementById('result').innerHTML = `
+                    <h3>API Test Result:</h3>
+                    <p><strong>Status:</strong> ${response.status}</p>
+                    <p><strong>Response:</strong> <pre>${JSON.stringify(result, null, 2)}</pre></p>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>API Test Error:</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

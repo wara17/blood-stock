@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Button, Navbar, Nav, Dropdown, Badge, Modal } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Badge, Modal } from 'react-bootstrap';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import bloodInventoryAPI, { BloodGroupStats, StatusStats } from '../services/bloodInventoryAPI';
+import bloodReservationAPI from '../services/bloodReservationAPI';
 
 // Interface for blood group data (using API types)
 interface BloodGroupData {
@@ -13,16 +14,13 @@ interface BloodGroupData {
 }
 
 const Dashboard: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [bloodGroupData, setBloodGroupData] = useState<BloodGroupData | null>(null);
   const [statusStats, setStatusStats] = useState<StatusStats | null>(null);
+  const [pendingReservationsCount, setPendingReservationsCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [showDonationGuide, setShowDonationGuide] = useState<boolean>(false);
-
-  const handleLogout = () => {
-    logout();
-  };
 
   const navigateToBloodInventory = () => {
     navigate('/blood-inventory');
@@ -75,13 +73,30 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  // Load pending reservations count
+  const loadPendingReservationsCount = async () => {
+    try {
+      const response = await bloodReservationAPI.getPendingReservationsCount();
+      
+      if (response.success && response.data) {
+        // ใช้จำนวนรายการจอง (count) แทนจำนวนถุงเลือด (totalQuantity)
+        setPendingReservationsCount(response.data.count);
+        console.log('📊 Pending reservations - Count:', response.data.count, 'Total Quantity:', response.data.totalQuantity);
+      }
+    } catch (error) {
+      console.error('Error loading pending reservations count:', error);
+      setPendingReservationsCount(0);
+    }
+  };
+
   // Load all data
   const loadDashboardData = async () => {
     setLoading(true);
     try {
       await Promise.all([
         loadBloodGroupStats(),
-        loadStatusStats()
+        loadStatusStats(),
+        loadPendingReservationsCount()
       ]);
     } finally {
       setLoading(false);
@@ -99,37 +114,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <>
-      {/* Navigation Bar */}
-      <Navbar bg="danger" variant="dark" expand="lg" className="shadow">
-        <Container>
-          <Navbar.Brand as={Link} to="/dashboard">
-            🩸 Blood Stock Management
-          </Navbar.Brand>
-          <Navbar.Toggle aria-controls="basic-navbar-nav" />
-          <Navbar.Collapse id="basic-navbar-nav">
-            <Nav className="me-auto">
-              <Nav.Link as={Link} to="/dashboard" active>หน้าหลัก</Nav.Link>
-              <Nav.Link as={Link} to="/blood-inventory">คลังเลือด</Nav.Link>
-              <Nav.Link href="#requests">การร้องขอ</Nav.Link>
-              <Nav.Link href="#reports">รายงาน</Nav.Link>
-            </Nav>
-            <Nav>
-              <Dropdown align="end">
-                <Dropdown.Toggle variant="outline-light" id="dropdown-basic">
-                  👤 {user?.username}
-                </Dropdown.Toggle>
-                <Dropdown.Menu>
-                  <Dropdown.Item href="#profile">โปรไฟล์</Dropdown.Item>
-                  <Dropdown.Item href="#settings">การตั้งค่า</Dropdown.Item>
-                  <Dropdown.Divider />
-                  <Dropdown.Item onClick={handleLogout}>ออกจากระบบ</Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown>
-            </Nav>
-          </Navbar.Collapse>
-        </Container>
-      </Navbar>
-
       {/* Main Content */}
       <Container className="mt-4">
         <Row>
@@ -139,14 +123,14 @@ const Dashboard: React.FC = () => {
             {/* Welcome Card */}
             <Card className="mb-4">
               <Card.Body>
-                <Card.Title>สวัสดี, {user?.username}! 👋</Card.Title>
+                <Card.Title><i className="fas fa-hand-wave me-2"></i>สวัสดี, {user?.username}!</Card.Title>
                 <Card.Text>
                   คุณได้เข้าสู่ระบบเรียบร้อยแล้ว เวลา: {new Date().toLocaleString('th-TH')}
                 </Card.Text>
                 <Card.Text className="text-muted">
                   <small>
-                    อีเมล: {user?.email} | 
-                    สมาชิกตั้งแต่: {user?.created_at ? new Date(user.created_at).toLocaleDateString('th-TH') : '-'}
+                    <i className="fas fa-envelope me-1"></i>อีเมล: {user?.email} | 
+                    <i className="fas fa-calendar-plus ms-2 me-1"></i>สมาชิกตั้งแต่: {user?.created_at ? new Date(user.created_at).toLocaleDateString('th-TH') : '-'}
                   </small>
                 </Card.Text>
               </Card.Body>
@@ -170,7 +154,7 @@ const Dashboard: React.FC = () => {
                 >
                   <Card.Body className="p-3">
                     <div className="d-flex align-items-center">
-                      <div className="fs-2 text-primary me-3">🩸</div>
+                      <div className="fs-2 text-primary me-3"><i className="fas fa-tint"></i></div>
                       <div>
                         <Card.Title className="h6 mb-1">คลังเลือด</Card.Title>
                         <Card.Text className="small text-muted mb-0">จัดการข้อมูลเลือดในคลัง</Card.Text>
@@ -184,7 +168,7 @@ const Dashboard: React.FC = () => {
                 <Card 
                   className="border-success shadow-sm h-100" 
                   style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                  onClick={() => navigate('/blood-reservation')}
+                  onClick={() => navigate('/blood-reservation-list')}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
@@ -196,7 +180,7 @@ const Dashboard: React.FC = () => {
                 >
                   <Card.Body className="p-3">
                     <div className="d-flex align-items-center">
-                      <div className="fs-2 text-success me-3">📋</div>
+                      <div className="fs-2 text-success me-3"><i className="fas fa-calendar-check"></i></div>
                       <div>
                         <Card.Title className="h6 mb-1">จองเลือด / ขอเลือด</Card.Title>
                         <Card.Text className="small text-muted mb-0">จัดการการจองและคำขอเลือด</Card.Text>
@@ -205,12 +189,11 @@ const Dashboard: React.FC = () => {
                   </Card.Body>
                 </Card>
               </Col>
-
               <Col lg={3} md={6} className="mb-3">
                 <Card 
-                  className="border-warning shadow-sm h-100" 
+                  className="border-danger shadow-sm h-100" 
                   style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
-                  onClick={() => {/* TODO: navigate to donors */}}
+                  onClick={() => navigate('/pending-dispense')}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.transform = 'translateY(-2px)';
                     e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
@@ -222,10 +205,10 @@ const Dashboard: React.FC = () => {
                 >
                   <Card.Body className="p-3">
                     <div className="d-flex align-items-center">
-                      <div className="fs-2 text-warning me-3">�</div>
+                      <div className="fs-2 text-danger me-3"><i className="fas fa-clock"></i></div>
                       <div>
                         <Card.Title className="h6 mb-1">จ่ายเลือด</Card.Title>
-                        <Card.Text className="small text-muted mb-0">จัดการการจ่ายเลือดให้ผู้ป่วย</Card.Text>
+                        <Card.Text className="small text-muted mb-0">จัดการการจ่ายเลือด</Card.Text>
                       </div>
                     </div>
                   </Card.Body>
@@ -248,7 +231,7 @@ const Dashboard: React.FC = () => {
                 >
                   <Card.Body className="p-3">
                     <div className="d-flex align-items-center">
-                      <div className="fs-2 text-info me-3">�</div>
+                      <div className="fs-2 text-info me-3"><i className="fas fa-heart"></i></div>
                       <div>
                         <Card.Title className="h6 mb-1">การเตรียมตัวก่อนบริจาคเลือด</Card.Title>
                         <Card.Text className="small text-muted mb-0">คำแนะนำการเตรียมตัวสำหรับผู้บริจาค</Card.Text>
@@ -266,8 +249,8 @@ const Dashboard: React.FC = () => {
                 <Card className="mb-4">
                   <Card.Header>
                     <h5 className="mb-0 text-center">
-                      🩸 สถิติเลือดตามหมู่เลือด (เลือดพร้อมใช้งาน)
-                      {loading && <span className="ms-2">🔄</span>}
+                      <i className="fas fa-tint me-2"></i>สถิติเลือดตามหมู่เลือด (เลือดพร้อมใช้งาน)
+                      {loading && <i className="fas fa-spinner fa-spin ms-2"></i>}
                     </h5>
                   </Card.Header>
                   <Card.Body>
@@ -474,7 +457,7 @@ const Dashboard: React.FC = () => {
                   {/* ใกล้หมดอายุ */}
                   <Card className="border-danger">
                     <Card.Header className="bg-danger text-white">
-                      <h6 className="mb-0 text-center">⚠️ ใกล้หมดอายุ</h6>
+                      <h6 className="mb-0 text-center"><i className="fas fa-exclamation-triangle me-2"></i>ใกล้หมดอายุ</h6>
                     </Card.Header>
                     <Card.Body className="text-center p-3">
                       <div className="display-6 text-danger mb-2">
@@ -485,28 +468,27 @@ const Dashboard: React.FC = () => {
                   </Card>
 
                   {/* จองแล้ว */}
-                  <Card className="border-info">
+                  <Card 
+                    className="border-info" 
+                    style={{ cursor: 'pointer', transition: 'all 0.2s ease' }}
+                    onClick={() => navigate('/pending-dispense')}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                    }}
+                  >
                     <Card.Header className="bg-info text-white">
-                      <h6 className="mb-0 text-center">📋 จองแล้ว</h6>
+                      <h6 className="mb-0 text-center"><i className="fas fa-calendar-check me-2"></i> รอจ่าย</h6>
                     </Card.Header>
                     <Card.Body className="text-center p-3">
                       <div className="display-6 text-info mb-2">
-                        {loading ? '...' : (statusStats?.reserved || 0)}
+                        {loading ? '...' : pendingReservationsCount}
                       </div>
-                      <p className="mb-0 small text-muted">ถุงเลือดที่มีการจอง<br />รอการใช้งาน</p>
-                    </Card.Body>
-                  </Card>
-
-                  {/* ใช้งานแล้ว */}
-                  <Card className="border-secondary">
-                    <Card.Header className="bg-secondary text-white">
-                      <h6 className="mb-0 text-center">✅ ใช้งานแล้ว</h6>
-                    </Card.Header>
-                    <Card.Body className="text-center p-3">
-                      <div className="display-6 text-secondary mb-2">
-                        {loading ? '...' : (statusStats?.usedToday || 0)}
-                      </div>
-                      <p className="mb-0 small text-muted">ถุงเลือดที่ใช้งานแล้ว<br />(วันนี้)</p>
+                      <p className="mb-0 small text-muted">รายการจองที่รอจ่าย<br />(รายการ)</p>
                     </Card.Body>
                   </Card>
                 </div>
@@ -516,16 +498,16 @@ const Dashboard: React.FC = () => {
             {/* Development Note */}
             <Card className="mt-4 border-secondary">
               <Card.Body>
-                <Card.Title className="text-secondary">🚧 โหมดพัฒนา</Card.Title>
+                <Card.Title className="text-secondary"><i className="fas fa-tools me-2"></i>โหมดพัฒนา</Card.Title>
                 <Card.Text>
                   ระบบนี้อยู่ในโหมดการพัฒนา ฟีเจอร์ต่างๆ จะถูกเพิ่มเข้ามาในอนาคต
                 </Card.Text>
                 <Card.Text className="text-muted">
                   <small>
-                    🔐 JWT Authentication: ✅ สำเร็จ<br />
-                    🗄️ Database: ✅ PostgreSQL พร้อมใช้งาน<br />
-                    🌐 API: ✅ Backend ทำงานได้ปกติ<br />
-                    💻 Frontend: ✅ React + Bootstrap พร้อม
+                    <i className="fas fa-lock text-success me-1"></i>JWT Authentication: ✅ สำเร็จ<br />
+                    <i className="fas fa-database text-success me-1"></i>Database: ✅ PostgreSQL พร้อมใช้งาน<br />
+                    <i className="fas fa-globe text-success me-1"></i>API: ✅ Backend ทำงานได้ปกติ<br />
+                    <i className="fas fa-laptop-code text-success me-1"></i>Frontend: ✅ React + Bootstrap พร้อม
                   </small>
                 </Card.Text>
               </Card.Body>
@@ -542,7 +524,7 @@ const Dashboard: React.FC = () => {
         centered
       >
         <Modal.Header closeButton>
-          <Modal.Title>📋 การเตรียมตัวก่อนบริจาคเลือด</Modal.Title>
+          <Modal.Title><i className="fas fa-clipboard-list me-2"></i>การเตรียมตัวก่อนบริจาคเลือด</Modal.Title>
         </Modal.Header>
         <Modal.Body className="text-center">
           <img 
@@ -557,11 +539,11 @@ const Dashboard: React.FC = () => {
             </p>
           </div>
         </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={closeDonationGuide}>
-            ปิด
+        {/* <Modal.Footer>
+          <Button className="btn btn-secondary" onClick={closeDonationGuide}>
+            <i className="fas fa-times me-2"></i>ปิด
           </Button>
-        </Modal.Footer>
+        </Modal.Footer> */}
       </Modal>
     </>
   );

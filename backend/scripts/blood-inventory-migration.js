@@ -9,7 +9,7 @@ async function createBloodInventoryTable() {
       CREATE TABLE IF NOT EXISTS blood_inventory (
         id SERIAL PRIMARY KEY,
         received_date DATE NOT NULL,
-        blood_type VARCHAR(20) NOT NULL CHECK (blood_type IN ('Whole blood', 'PRC', 'LPRC')),
+        blood_type VARCHAR(20) NOT NULL CHECK (blood_type IN ('Whole_blood', 'PRC', 'LPRC')),
         blood_group VARCHAR(5) NOT NULL CHECK (blood_group IN ('A', 'B', 'AB', 'O')),
         rh_factor VARCHAR(10) NOT NULL CHECK (rh_factor IN ('Positive', 'Negative')),
         bag_number VARCHAR(20) NOT NULL UNIQUE,

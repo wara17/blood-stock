@@ -547,6 +547,62 @@ class BloodInventoryModel {
       client.release();
     }
   }
+
+  // Check availability for reservation
+  static async checkAvailability(blood_type, blood_group, rh_factor, requiredQuantity) {
+    const client = await pool.connect();
+    
+    try {
+      // Get available count from inventory
+      const inventoryQuery = `
+        SELECT COUNT(*) as available_count
+        FROM blood_inventory 
+        WHERE status = 'available' 
+        AND expiry_date > CURRENT_DATE
+        AND blood_type = $1
+        AND blood_group = $2
+        AND rh_factor = $3
+      `;
+      
+      const inventoryResult = await client.query(inventoryQuery, [blood_type, blood_group, rh_factor]);
+      const availableCount = parseInt(inventoryResult.rows[0].available_count) || 0;
+      
+      // Get pending reservations count
+      const pendingQuery = `
+        SELECT COALESCE(SUM(quantity), 0) as pending_count
+        FROM blood_reservations 
+        WHERE status = 'pending'
+        AND blood_type = $1
+        AND blood_group = $2
+        AND rh_factor = $3
+      `;
+      
+      const pendingResult = await client.query(pendingQuery, [blood_type, blood_group, rh_factor]);
+      const pendingCount = parseInt(pendingResult.rows[0].pending_count) || 0;
+      
+      // Calculate actual available after pending reservations
+      let actualAvailable = Math.max(0, availableCount - pendingCount);
+      
+      // Special rule for blood group O: always reserve 2 units
+      let effectiveAvailableCount = actualAvailable;
+      if (blood_group === 'O') {
+        effectiveAvailableCount = Math.max(0, actualAvailable - 2); // Reserve 2 units for emergency
+      }
+      
+      return {
+        available: effectiveAvailableCount >= requiredQuantity,
+        availableCount: effectiveAvailableCount,
+        totalCount: availableCount,
+        pendingCount: pendingCount,
+        actualAvailable: actualAvailable,
+        requiredQuantity,
+        reservedUnits: blood_group === 'O' ? 2 : 0
+      };
+      
+    } finally {
+      client.release();
+    }
+  }
 }
 
 module.exports = BloodInventoryModel;

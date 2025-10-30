@@ -133,9 +133,8 @@ const LoginPage: React.FC = () => {
                   </Form.Group>
 
                   <Button
-                    variant="danger"
+                    className="btn btn-danger w-100 mb-3"
                     type="submit"
-                    className="w-100 mb-3"
                     disabled={isLoading}
                   >
                     {isLoading ? (
@@ -151,7 +150,9 @@ const LoginPage: React.FC = () => {
                         กำลังเข้าสู่ระบบ...
                       </>
                     ) : (
-                      'เข้าสู่ระบบ'
+                      <>
+                        <i className="fas fa-sign-in-alt me-2"></i>เข้าสู่ระบบ
+                      </>
                     )}
                   </Button>
 
@@ -230,9 +231,8 @@ const LoginPage: React.FC = () => {
                   </Form.Group>
 
                   <Button
-                    variant="success"
+                    className="btn btn-success w-100 mb-3"
                     type="submit"
-                    className="w-100 mb-3"
                     disabled={isLoading || registerData.password !== registerData.confirmPassword}
                   >
                     {isLoading ? (
@@ -248,7 +248,9 @@ const LoginPage: React.FC = () => {
                         กำลังสมัครสมาชิก...
                       </>
                     ) : (
-                      'สมัครสมาชิก'
+                      <>
+                        <i className="fas fa-user-plus me-2"></i>สมัครสมาชิก
+                      </>
                     )}
                   </Button>
 

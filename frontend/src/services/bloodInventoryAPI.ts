@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { createAuthenticatedAPI } from './authInterceptors';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3002/api';
 
 // Create axios instance with shared auth interceptors
 const api = createAuthenticatedAPI(API_BASE_URL);

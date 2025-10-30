@@ -5,17 +5,25 @@ const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+  console.log('Auth Debug:', {
+    authHeader: authHeader ? 'exists' : 'missing',
+    token: token ? 'exists' : 'missing',
+    path: req.path
+  });
+
   if (!token) {
     return res.status(401).json({ message: 'Access token required' });
   }
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
+      console.log('JWT Error:', err.message);
       if (err.name === 'TokenExpiredError') {
         return res.status(401).json({ message: 'Token expired' });
       }
       return res.status(403).json({ message: 'Invalid token' });
     }
+    console.log('JWT Success for user:', user.username);
     req.user = user;
     next();
   });
