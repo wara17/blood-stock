@@ -1,6 +1,182 @@
-const pool = require('../config/database');
+const { DataTypes, Op } = require('sequelize');
+const { sequelize, pool } = require('../config/database');
 
-class BloodReservation {
+// Sequelize Model Definition
+let BloodReservation, User;
+
+if (sequelize) {
+  // User model (for associations)
+  User = sequelize.define('User', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    username: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    },
+    email: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    },
+    password: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    firstname: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    lastname: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    refresh_token: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    last_login: {
+      type: DataTypes.DATE,
+      allowNull: true
+    }
+  }, {
+    tableName: 'users',
+    underscored: true,
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: false
+  });
+
+  // Blood Reservation Sequelize model
+  BloodReservation = sequelize.define('BloodReservation', {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    blood_group: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    blood_type: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    rh_factor: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    quantity: {
+      type: DataTypes.INTEGER,
+      allowNull: false
+    },
+    patient_name: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    department: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    status: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'pending'
+    },
+    reservation_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      defaultValue: DataTypes.NOW
+    },
+    user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    approved_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    approved_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    completed_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    completed_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    cancelled_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      }
+    },
+    cancelled_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    cancellation_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    }
+  }, {
+    tableName: 'blood_reservations',
+    underscored: true,
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  });
+
+  // Define associations
+  BloodReservation.belongsTo(User, { 
+    foreignKey: 'user_id', 
+    as: 'reserved_by_user' 
+  });
+  BloodReservation.belongsTo(User, { 
+    foreignKey: 'approved_by', 
+    as: 'approved_by_user' 
+  });
+  BloodReservation.belongsTo(User, { 
+    foreignKey: 'completed_by', 
+    as: 'completed_by_user' 
+  });
+  BloodReservation.belongsTo(User, { 
+    foreignKey: 'cancelled_by', 
+    as: 'cancelled_by_user' 
+  });
+
+  User.hasMany(BloodReservation, { 
+    foreignKey: 'user_id', 
+    as: 'reservations' 
+  });
+}
+
+// Legacy SQL implementation for fallback
+class LegacyBloodReservation {
   // Get all reservations with user information
   static async getAll(filters = {}) {
     try {
@@ -449,4 +625,366 @@ class BloodReservation {
   }
 }
 
-module.exports = BloodReservation;
+// Sequelize Model Wrapper
+class BloodReservationModel {
+  
+  // Get all reservations with user information
+  static async getAll(filters = {}) {
+    try {
+      if (!BloodReservation) {
+        console.log('⚠️  Using legacy BloodReservation model');
+        return await LegacyBloodReservation.getAll(filters);
+      }
+
+      console.log('✅ Using Sequelize BloodReservation model');
+      
+      const whereClause = {};
+      const include = [
+        {
+          model: User,
+          as: 'reserved_by_user',
+          attributes: ['id', 'firstname', 'lastname']
+        },
+        {
+          model: User,
+          as: 'approved_by_user',
+          attributes: ['id', 'firstname', 'lastname'],
+          required: false
+        },
+        {
+          model: User,
+          as: 'completed_by_user',
+          attributes: ['id', 'firstname', 'lastname'],
+          required: false
+        },
+        {
+          model: User,
+          as: 'cancelled_by_user',
+          attributes: ['id', 'firstname', 'lastname'],
+          required: false
+        }
+      ];
+
+      // Build where clause from filters
+      if (filters.status) whereClause.status = filters.status;
+      if (filters.blood_group) whereClause.blood_group = filters.blood_group;
+      if (filters.department) whereClause.department = filters.department;
+      if (filters.user_id) whereClause.user_id = filters.user_id;
+      if (filters.id) {
+        whereClause.id = {
+          [Op.like]: `%${filters.id}%`
+        };
+      }
+      if (filters.patient_name) {
+        whereClause.patient_name = {
+          [Op.iLike]: `%${filters.patient_name}%`
+        };
+      }
+
+      const queryOptions = {
+        where: whereClause,
+        include,
+        order: [['created_at', 'DESC']],
+        raw: false,
+        nest: true
+      };
+
+      // Handle pagination
+      if (filters.limit) {
+        queryOptions.limit = parseInt(filters.limit);
+        if (filters.offset) {
+          queryOptions.offset = parseInt(filters.offset);
+        }
+      }
+
+      const { rows: data, count: total } = await BloodReservation.findAndCountAll(queryOptions);
+
+      // Transform data to match legacy format
+      const transformedData = data.map(reservation => {
+        const reservationData = reservation.toJSON();
+        return {
+          ...reservationData,
+          reserved_by: reservationData.reserved_by_user ? 
+            `${reservationData.reserved_by_user.firstname} ${reservationData.reserved_by_user.lastname}` : null,
+          approved_by_username: reservationData.approved_by_user ? 
+            `${reservationData.approved_by_user.firstname} ${reservationData.approved_by_user.lastname}` : null,
+          completed_by_username: reservationData.completed_by_user ? 
+            `${reservationData.completed_by_user.firstname} ${reservationData.completed_by_user.lastname}` : null,
+          cancelled_by_username: reservationData.cancelled_by_user ? 
+            `${reservationData.cancelled_by_user.firstname} ${reservationData.cancelled_by_user.lastname}` : null
+        };
+      });
+
+      return {
+        data: transformedData,
+        total,
+        pagination: filters.limit ? {
+          page: Math.floor((filters.offset || 0) / filters.limit) + 1,
+          limit: filters.limit,
+          total,
+          totalPages: Math.ceil(total / filters.limit)
+        } : null
+      };
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.getAll:', error);
+      throw error;
+    }
+  }
+
+  // Get reservation by ID
+  static async getById(id) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.getById(id);
+      }
+
+      const reservation = await BloodReservation.findByPk(id, {
+        include: [
+          {
+            model: User,
+            as: 'reserved_by_user',
+            attributes: ['id', 'firstname', 'lastname']
+          },
+          {
+            model: User,
+            as: 'approved_by_user',
+            attributes: ['id', 'firstname', 'lastname'],
+            required: false
+          },
+          {
+            model: User,
+            as: 'completed_by_user',
+            attributes: ['id', 'firstname', 'lastname'],
+            required: false
+          },
+          {
+            model: User,
+            as: 'cancelled_by_user',
+            attributes: ['id', 'firstname', 'lastname'],
+            required: false
+          }
+        ]
+      });
+
+      if (!reservation) return null;
+
+      // Transform to match legacy format
+      const reservationData = reservation.toJSON();
+      return {
+        ...reservationData,
+        reserved_by: reservationData.reserved_by_user ? 
+          `${reservationData.reserved_by_user.firstname} ${reservationData.reserved_by_user.lastname}` : null,
+        approved_by_username: reservationData.approved_by_user ? 
+          `${reservationData.approved_by_user.firstname} ${reservationData.approved_by_user.lastname}` : null,
+        completed_by_username: reservationData.completed_by_user ? 
+          `${reservationData.completed_by_user.firstname} ${reservationData.completed_by_user.lastname}` : null,
+        cancelled_by_username: reservationData.cancelled_by_user ? 
+          `${reservationData.cancelled_by_user.firstname} ${reservationData.cancelled_by_user.lastname}` : null
+      };
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.getById:', error);
+      throw error;
+    }
+  }
+
+  // Create new reservation
+  static async create(data) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.create(data);
+      }
+
+      // Check blood availability first
+      const BloodInventoryModel = require('./BloodInventory').BloodInventoryModel;
+      if (BloodInventoryModel && BloodInventoryModel.checkAvailability) {
+        const availability = await BloodInventoryModel.checkAvailability(
+          data.blood_type,
+          data.blood_group,
+          data.rh_factor,
+          data.quantity
+        );
+
+        if (!availability.available) {
+          const error = new Error('Insufficient blood inventory for this reservation');
+          error.code = 'INSUFFICIENT_BLOOD_INVENTORY';
+          error.details = availability;
+          throw error;
+        }
+      }
+
+      const reservation = await BloodReservation.create(data);
+      return reservation.toJSON();
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.create:', error);
+      throw error;
+    }
+  }
+
+  // Update reservation
+  static async update(id, data) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.update(id, data);
+      }
+
+      const [updatedRows] = await BloodReservation.update(data, {
+        where: { id },
+        returning: true
+      });
+
+      if (updatedRows === 0) {
+        throw new Error('Reservation not found');
+      }
+
+      return await this.getById(id);
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.update:', error);
+      throw error;
+    }
+  }
+
+  // Update reservation status
+  static async updateStatus(id, status, userId = null, notes = null, cancellationNotes = null) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.updateStatus(id, status, userId, notes, cancellationNotes);
+      }
+
+      const updateData = { status };
+      
+      if (status === 'approved' && userId) {
+        updateData.approved_by = userId;
+        updateData.approved_at = new Date();
+      } else if (status === 'completed' && userId) {
+        updateData.completed_by = userId;
+        updateData.completed_at = new Date();
+      } else if (['cancelled', 'cancelled_by_dispenser'].includes(status)) {
+        if (userId) updateData.cancelled_by = userId;
+        updateData.cancelled_at = new Date();
+        if (cancellationNotes) updateData.cancellation_notes = cancellationNotes;
+      }
+
+      if (notes) updateData.notes = notes;
+
+      const [updatedRows] = await BloodReservation.update(updateData, {
+        where: { id },
+        returning: true
+      });
+
+      if (updatedRows === 0) {
+        throw new Error('Reservation not found');
+      }
+
+      return await this.getById(id);
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.updateStatus:', error);
+      throw error;
+    }
+  }
+
+  // Delete reservation
+  static async delete(id) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.delete(id);
+      }
+
+      const deletedRows = await BloodReservation.destroy({
+        where: { id }
+      });
+
+      if (deletedRows === 0) {
+        throw new Error('Reservation not found');
+      }
+
+      return true;
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.delete:', error);
+      throw error;
+    }
+  }
+
+  // Get reservations by user ID
+  static async getByUserId(userId, filters = {}) {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.getByUserId(userId, filters);
+      }
+
+      const whereClause = { user_id: userId };
+      if (filters.status) whereClause.status = filters.status;
+
+      const queryOptions = {
+        where: whereClause,
+        include: [
+          {
+            model: User,
+            as: 'reserved_by_user',
+            attributes: ['id', 'firstname', 'lastname']
+          }
+        ],
+        order: [['created_at', 'DESC']]
+      };
+
+      if (filters.limit) queryOptions.limit = parseInt(filters.limit);
+
+      const reservations = await BloodReservation.findAll(queryOptions);
+      return reservations.map(r => r.toJSON());
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.getByUserId:', error);
+      throw error;
+    }
+  }
+
+  // Get statistics
+  static async getStats() {
+    try {
+      if (!BloodReservation) {
+        return await LegacyBloodReservation.getStats();
+      }
+
+      const stats = await BloodReservation.findAll({
+        attributes: [
+          'status',
+          [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        ],
+        group: ['status'],
+        raw: true
+      });
+
+      const result = {
+        total: 0,
+        pending: 0,
+        approved: 0,
+        completed: 0,
+        cancelled: 0
+      };
+
+      stats.forEach(stat => {
+        result[stat.status] = parseInt(stat.count);
+        result.total += parseInt(stat.count);
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('Error in BloodReservationModel.getStats:', error);
+      throw error;
+    }
+  }
+}
+
+module.exports = {
+  BloodReservation: BloodReservationModel,
+  BloodReservationModel,
+  User,
+  LegacyBloodReservation: LegacyBloodReservation,
+  SequelizeBloodReservation: BloodReservation || null
+};

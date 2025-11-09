@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const BloodReservation = require('../models/BloodReservation');
+const { BloodReservation } = require('../models/BloodReservation');
 const ReservationBloodBagsModel = require('../models/ReservationBloodBags');
 const BloodInventoryModel = require('../models/BloodInventory');
 const { authenticateToken } = require('../middleware/auth');
@@ -58,7 +58,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // Get pending reservations count (จำนวนรายการจอง)
 router.get('/pending-count', authenticateToken, async (req, res) => {
   try {
-    const pool = require('../config/database');
+    const { pool } = require('../config/database');
     
     console.log('🔍 Getting pending reservations count...');
     
@@ -456,7 +456,7 @@ router.post('/dispense', authenticateToken, [
     const { reservationId, bloodBags, dispensedBy, notes } = req.body;
 
     // Start transaction
-    const pool = require('../config/database');
+    const { pool } = require('../config/database');
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -528,7 +528,7 @@ router.post('/dispense', authenticateToken, [
 // Get pending reservations summary for inventory calculation
 router.get('/pending-summary', authenticateToken, async (req, res) => {
   try {
-    const pool = require('../config/database');
+    const { pool } = require('../config/database');
     
     console.log('🔍 Getting pending reservations summary...');
     

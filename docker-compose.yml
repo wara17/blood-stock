@@ -1,0 +1,90 @@
+# Blood Stock Management System - Production Deployment
+version: '3.8'
+
+services:
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: blood-stock-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-blood_stock_production}
+      POSTGRES_USER: ${DB_USER:-blood_stock_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - blood-stock-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-blood_stock_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blood-stock-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-blood_stock_production}
+      DB_USER: ${DB_USER:-blood_stock_user}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_TYPE: postgresql
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+    networks:
+      - blood-stock-network
+    restart: unless-stopped
+    command: >
+      sh -c "npm run setup && npm start"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: blood-stock-frontend
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    networks:
+      - blood-stock-network
+    restart: unless-stopped
+
+  # Optional: Nginx reverse proxy (if you want additional proxy layer)
+  nginx:
+    image: nginx:alpine
+    container_name: blood-stock-proxy
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "${PROXY_PORT:-443}:443"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - blood-stock-network
+    restart: unless-stopped
+    profiles:
+      - with-ssl
+
+volumes:
+  postgres_data:
+
+networks:
+  blood-stock-network:
+    driver: bridge

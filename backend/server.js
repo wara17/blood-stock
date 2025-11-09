@@ -7,8 +7,11 @@ const authRoutes = require('./routes/auth');
 const bloodInventoryRoutes = require('./routes/bloodInventory');
 const reservationRoutes = require('./routes/reservations');
 
+// Import models and database setup
+const { testConnection, syncDatabase, initializeModels } = require('./models/index');
+
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // CORS configuration
 const corsOptions = {
@@ -70,11 +73,55 @@ app.use('*', (req, res) => {
   res.status(404).json({ message: 'Endpoint not found' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server is running on port ${PORT}`);
-  console.log(`📍 API available at: http://localhost:${PORT}`);
-  console.log(`🏥 Blood Stock Management API ready!`);
-});
+// Start server with database initialization
+const startServer = async () => {
+  try {
+    console.log('🔄 Initializing Blood Stock Management API...');
+    
+    // Initialize models (will fallback to legacy if needed)
+    const sequelizeReady = await initializeModels();
+    
+    if (sequelizeReady) {
+      // If Sequelize models are ready, sync database
+      try {
+        await syncDatabase(false);
+        console.log('📊 Sequelize models synced successfully');
+      } catch (syncError) {
+        console.warn('⚠️  Warning: Could not sync database models:', syncError.message);
+      }
+    }
+    
+    // Start the Express server
+    app.listen(PORT, () => {
+      console.log(`\n🚀 Backend server is running on port ${PORT}`);
+      console.log(`📍 API available at: http://localhost:${PORT}`);
+      
+      if (sequelizeReady) {
+        console.log(`🏥 Blood Stock Management API ready with Sequelize ORM!`);
+        console.log(`🗄️  Database: Connected and synced successfully`);
+        console.log(`✨ Multiple database support enabled`);
+      } else {
+        console.log(`🏥 Blood Stock Management API ready with Legacy SQL!`);
+        console.log(`📝 Using PostgreSQL with raw SQL queries`);
+        console.log(`💡 Install and start PostgreSQL to enable ORM features`);
+      }
+      
+      console.log(`\n📋 Available endpoints:`);
+      console.log(`   🔐 Authentication: /api/auth`);
+      console.log(`   🩸 Blood Inventory: /api/blood-inventory`);
+      console.log(`   📋 Reservations: /api/reservations`);
+      console.log(`   ❤️  Health Check: /api/health\n`);
+    });
+    
+  } catch (error) {
+    console.error('❌ Critical error starting server:', error);
+    process.exit(1);
+  }
+};
+
+// Initialize server
+startServer();
+
+module.exports = app;
 
 module.exports = app;

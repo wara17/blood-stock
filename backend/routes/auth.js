@@ -1,10 +1,36 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const pool = require('../config/database');
+const { pool, sequelize } = require('../config/database');
 const { generateTokens, verifyRefreshToken, authenticateToken } = require('../middleware/auth');
+const { Sequelize, Op } = require('sequelize');
 
 const router = express.Router();
+
+// Dynamic User model loading
+const getUserModel = () => {
+  try {
+    // Try to get from models index first
+    const modelsIndex = require('../models/index');
+    
+    if (modelsIndex.User) {
+      console.log('✅ Using Sequelize User model');
+      return { model: modelsIndex.User, isSequelize: true };
+    }
+    
+    // Try direct access to Sequelize model
+    const { User } = require('../models/BloodReservation');
+    if (User) {
+      console.log('✅ Using direct Sequelize User model');
+      return { model: User, isSequelize: true };
+    }
+  } catch (error) {
+    console.log('⚠️  Sequelize User model not available, using raw SQL');
+  }
+  
+  // Fallback to raw SQL
+  return { model: null, isSequelize: false };
+};
 
 // Register endpoint
 router.post('/register', [
@@ -18,51 +44,106 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { username, email, password } = req.body;
+    const { username, email, password, firstname, lastname } = req.body;
+    const { model: User, isSequelize } = getUserModel();
 
-    // Check if user already exists
-    const userExists = await pool.query(
-      'SELECT id FROM users WHERE username = $1 OR email = $2',
-      [username, email]
-    );
+    if (isSequelize && User) {
+      // Use Sequelize
+      console.log('📝 Creating user with Sequelize...');
+      
+      // Check if user already exists
+      const existingUser = await User.findOne({
+        where: {
+          [Op.or]: [
+            { username },
+            { email }
+          ]
+        }
+      });
 
-    if (userExists.rows.length > 0) {
-      return res.status(400).json({ message: 'User already exists' });
+      if (existingUser) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Create user
+      const newUser = await User.create({
+        username,
+        email,
+        password: hashedPassword,
+        firstname: firstname || null,
+        lastname: lastname || null
+      });
+
+      const userData = {
+        id: newUser.id,
+        username: newUser.username,
+        email: newUser.email,
+        created_at: newUser.created_at
+      };
+
+      const { accessToken, refreshToken } = generateTokens(userData);
+
+      // Store refresh token
+      await User.update(
+        { refresh_token: refreshToken },
+        { where: { id: newUser.id } }
+      );
+
+      res.status(201).json({
+        message: 'User registered successfully',
+        user: userData,
+        accessToken,
+        refreshToken
+      });
+
+    } else {
+      // Use raw SQL (fallback)
+      console.log('📝 Creating user with raw SQL...');
+      
+      // Check if user already exists
+      const userExists = await pool.query(
+        'SELECT id FROM users WHERE username = $1 OR email = $2',
+        [username, email]
+      );
+
+      if (userExists.rows.length > 0) {
+        return res.status(400).json({ message: 'User already exists' });
+      }
+
+      // Hash password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+      // Create user
+      const newUser = await pool.query(
+        'INSERT INTO users (username, email, password, firstname, lastname) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, created_at',
+        [username, email, hashedPassword, firstname || null, lastname || null]
+      );
+
+      const user = newUser.rows[0];
+      const { accessToken, refreshToken } = generateTokens(user);
+
+      // Store refresh token in database
+      await pool.query(
+        'UPDATE users SET refresh_token = $1 WHERE id = $2',
+        [refreshToken, user.id]
+      );
+
+      res.status(201).json({
+        message: 'User registered successfully',
+        user,
+        accessToken,
+        refreshToken
+      });
     }
 
-    // Hash password
-    const saltRounds = 10;
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create user
-    const newUser = await pool.query(
-      'INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, username, email, created_at',
-      [username, email, hashedPassword]
-    );
-
-    const user = newUser.rows[0];
-    const { accessToken, refreshToken } = generateTokens(user);
-
-    // Store refresh token in database
-    await pool.query(
-      'UPDATE users SET refresh_token = $1 WHERE id = $2',
-      [refreshToken, user.id]
-    );
-
-    res.status(201).json({
-      message: 'User created successfully',
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email
-      },
-      accessToken,
-      refreshToken
-    });
-
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Registration error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
@@ -78,48 +159,102 @@ router.post('/login', [
     }
 
     const { username, password } = req.body;
+    const { model: User, isSequelize } = getUserModel();
 
-    // Find user
-    const userResult = await pool.query(
-      'SELECT id, username, email, password FROM users WHERE username = $1 OR email = $1',
-      [username]
-    );
+    if (isSequelize && User) {
+      // Use Sequelize
+      console.log('🔍 Finding user with Sequelize...');
+      
+      const user = await User.findOne({
+        where: {
+          [Op.or]: [
+            { username },
+            { email: username }
+          ]
+        }
+      });
 
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
 
-    const user = userResult.rows[0];
+      // Check password
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
 
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    // Generate tokens
-    const { accessToken, refreshToken } = generateTokens(user);
-
-    // Store refresh token in database
-    await pool.query(
-      'UPDATE users SET refresh_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2',
-      [refreshToken, user.id]
-    );
-
-    res.json({
-      message: 'Login successful',
-      user: {
+      const userData = {
         id: user.id,
         username: user.username,
         email: user.email
-      },
-      accessToken,
-      refreshToken
-    });
+      };
+
+      // Generate tokens
+      const { accessToken, refreshToken } = generateTokens(userData);
+
+      // Store refresh token
+      await User.update(
+        { 
+          refresh_token: refreshToken,
+          last_login: new Date()
+        },
+        { where: { id: user.id } }
+      );
+
+      res.json({
+        message: 'Login successful',
+        user: userData,
+        accessToken,
+        refreshToken
+      });
+
+    } else {
+      // Use raw SQL (fallback)
+      console.log('🔍 Finding user with raw SQL...');
+      
+      // Find user
+      const userResult = await pool.query(
+        'SELECT id, username, email, password FROM users WHERE username = $1 OR email = $1',
+        [username]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      const user = userResult.rows[0];
+
+      // Check password
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Generate tokens
+      const { accessToken, refreshToken } = generateTokens(user);
+
+      // Store refresh token in database
+      await pool.query(
+        'UPDATE users SET refresh_token = $1, last_login = CURRENT_TIMESTAMP WHERE id = $2',
+        [refreshToken, user.id]
+      );
+
+      res.json({
+        message: 'Login successful',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email
+        },
+        accessToken,
+        refreshToken
+      });
+    }
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
@@ -134,30 +269,68 @@ router.post('/refresh', async (req, res) => {
 
     // Verify refresh token
     const decoded = await verifyRefreshToken(refreshToken);
+    const { model: User, isSequelize } = getUserModel();
 
-    // Check if refresh token exists in database
-    const userResult = await pool.query(
-      'SELECT id, username, email, refresh_token FROM users WHERE id = $1',
-      [decoded.id]
-    );
+    if (isSequelize && User) {
+      // Use Sequelize
+      console.log('🔄 Refreshing token with Sequelize...');
+      
+      const user = await User.findOne({
+        where: { id: decoded.id },
+        attributes: ['id', 'username', 'email', 'refresh_token']
+      });
 
-    if (userResult.rows.length === 0 || userResult.rows[0].refresh_token !== refreshToken) {
-      return res.status(403).json({ message: 'Invalid refresh token' });
+      if (!user || user.refresh_token !== refreshToken) {
+        return res.status(403).json({ message: 'Invalid refresh token' });
+      }
+
+      const userData = {
+        id: user.id,
+        username: user.username,
+        email: user.email
+      };
+
+      const { accessToken, refreshToken: newRefreshToken } = generateTokens(userData);
+
+      // Update refresh token
+      await User.update(
+        { refresh_token: newRefreshToken },
+        { where: { id: user.id } }
+      );
+
+      res.json({
+        accessToken,
+        refreshToken: newRefreshToken
+      });
+
+    } else {
+      // Use raw SQL (fallback)
+      console.log('🔄 Refreshing token with raw SQL...');
+      
+      // Check if refresh token exists in database
+      const userResult = await pool.query(
+        'SELECT id, username, email, refresh_token FROM users WHERE id = $1',
+        [decoded.id]
+      );
+
+      if (userResult.rows.length === 0 || userResult.rows[0].refresh_token !== refreshToken) {
+        return res.status(403).json({ message: 'Invalid refresh token' });
+      }
+
+      const user = userResult.rows[0];
+      const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
+
+      // Update refresh token in database
+      await pool.query(
+        'UPDATE users SET refresh_token = $1 WHERE id = $2',
+        [newRefreshToken, user.id]
+      );
+
+      res.json({
+        accessToken,
+        refreshToken: newRefreshToken
+      });
     }
-
-    const user = userResult.rows[0];
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
-
-    // Update refresh token in database
-    await pool.query(
-      'UPDATE users SET refresh_token = $1 WHERE id = $2',
-      [newRefreshToken, user.id]
-    );
-
-    res.json({
-      accessToken,
-      refreshToken: newRefreshToken
-    });
 
   } catch (error) {
     console.error('Refresh token error:', error);
