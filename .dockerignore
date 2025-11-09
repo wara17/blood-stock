@@ -1,47 +1,47 @@
-# Root .dockerignore for multi-service build context
+# # Root .dockerignore for multi-service build context
 
-# Development files
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+# # Development files
+# node_modules/
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
 
-# Environment files
-.env
-.env.*
-!.env.production.example
+# # Environment files
+# .env
+# .env.*
+# !.env.production.example
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
+# # IDE files
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
 
-# OS files
-.DS_Store
-Thumbs.db
+# # OS files
+# .DS_Store
+# Thumbs.db
 
-# Git
-.git/
-.gitignore
+# # Git
+# .git/
+# .gitignore
 
-# Documentation
-*.md
-!README.md
+# # Documentation
+# *.md
+# !README.md
 
-# Logs
-logs/
-*.log
+# # Logs
+# logs/
+# *.log
 
-# Build artifacts (for frontend)
-build/
-dist/
+# # Build artifacts (for frontend)
+# build/
+# dist/
 
-# Test files
-__tests__/
-*.test.js
-*.spec.js
+# # Test files
+# __tests__/
+# *.test.js
+# *.spec.js
 
-# Development docker files
-docker-compose.dev.yml
-Dockerfile.dev
+# # Development docker files
+# docker-compose.dev.yml
+# Dockerfile.dev
